@@ -6,7 +6,7 @@ from pathlib import Path
 from transformers import AutoTokenizer
 
 tok = AutoTokenizer.from_pretrained(sys.argv[1])
-T = Path(sys.argv[2] if len(sys.argv) > 2 else Path(__file__).resolve().parent.parent / "QFN.asgard.v1.jinja").read_text()
+T = Path(sys.argv[2] if len(sys.argv) > 2 else Path(__file__).resolve().parent.parent / "qwen-asgard-v1.jinja").read_text()
 TOOLS = [{"type": "function", "function": {"name": "write_file", "description": "Write a file",
           "parameters": {"type": "object", "properties": {"path": {"type": "string"}, "content": {"type": "string"}},
                          "required": ["path", "content"]}}}]

@@ -9,7 +9,7 @@ from transformers import AutoTokenizer
 tok = AutoTokenizer.from_pretrained(sys.argv[1])
 ROOT = Path(__file__).resolve().parent.parent
 REF = ROOT / "tests" / "reference"
-T = Path(sys.argv[2] if len(sys.argv) > 2 else ROOT / "QFN.asgard.v1.jinja").read_text()
+T = Path(sys.argv[2] if len(sys.argv) > 2 else ROOT / "qwen-asgard-v1.jinja").read_text()
 C = Path(sys.argv[3] if len(sys.argv) > 3 else REF / "chromix-froggerick-v1.jinja").read_text()
 O = (REF / "qwen3.8-flash-next-official.jinja").read_text()
 TOOLS = [{"type": "function", "function": {"name": "get_weather", "description": "Current weather",

@@ -1,5 +1,5 @@
-{%- set template_version = "QFN.asgard.v1 (2026-10-17)" %}
-{#- QFN.asgard.v1 - chat template for Qwen3.8-Flash-Next and its fine-tunes (e.g. Swift 1.5).
+{%- set template_version = "Qwen Asgard v1 (2026-10-17)" %}
+{#- Qwen Asgard v1 - chat template for Qwen3.8-Flash-Next and its fine-tunes (e.g. Swift 1.5).
     Engines: vLLM / SGLang / transformers (jinja2), llama.cpp, @huggingface/jinja. License: Qwen Community License 1.0.
 
     Defaults render the model's own prompt byte for byte (system prompt, tool definitions and instructions, tool-call
@@ -54,7 +54,7 @@
       Also: Qwen (the Qwen3.8-Flash-Next template, Qwen Community License 1.0), Unsloth (the fixed embedded template),
         peculiar-ragdoll (Sharp terseness block, https://huggingface.co/peculiar-ragdoll/Qwen-Sharp-Chat-Templates),
         vllm-project/vllm#61206 (parallel tool-result ordering).
-    QFN.asgard: merge, switches, A/B benchmarks, audit and fixes by Leon Bollerup (Asgard), 2026-10-17.
+    Qwen Asgard: merge, switches, A/B benchmarks, audit and fixes by Leon Bollerup, 2026-10-17.
 -#}
 {#- chat_template_v1.jinja — Qwen3.8-Flash-Next external template, v1 (2026-08-28)
     Base: the GGUF-embedded Unsloth-fixed template (byte-identical except the fixes below).
@@ -278,7 +278,7 @@
     {%- endif %}
 {%- endif %}
 {#- Sharp v22.5.0 terseness block, appended after the caller's system prompt. `terse`
-    kwarg: default false in QFN.asgard (Sharp-naze v1.4 had it on). -#}
+    kwarg: default false in Qwen Asgard (Sharp-naze v1.4 had it on). -#}
 {%- if think_enabled %}
     {%- set _terse_lead = 'Answer directly, after thinking. Lead with the answer, then only what it needs to be correct and usable.' %}
 {%- else %}
@@ -634,4 +634,4 @@ If a user request is genuinely ambiguous, ask a sharp question, don't guess.
         {{- '<think>\n' }}
     {%- endif %}
 {%- endif %}
-{#- Unsloth fixes - developer role, merged system messages, tool calling. v1 external grafts: F1 empty-think cure, F2 effort aliases, F3 string tool args, F4 tool-failure escalation, F5 payload-discipline bullets, F6 reasoning/thinking field extraction, F7 inline effort tags; v1.4 think-off prefix parity + opener-less </think> split; v1.4-sharp: Sharp v22.5.0 terseness block (`terse` kwarg). QFN.asgard: every behaviour change is opt-in. -#}
+{#- Unsloth fixes - developer role, merged system messages, tool calling. v1 external grafts: F1 empty-think cure, F2 effort aliases, F3 string tool args, F4 tool-failure escalation, F5 payload-discipline bullets, F6 reasoning/thinking field extraction, F7 inline effort tags; v1.4 think-off prefix parity + opener-less </think> split; v1.4-sharp: Sharp v22.5.0 terseness block (`terse` kwarg). Qwen Asgard: every behaviour change is opt-in. -#}

@@ -1,4 +1,4 @@
-# Introduction texts for QFN.asgard.v1
+# Introduction texts for Qwen Asgard v1
 
 Replace `<LINK>` with the place you publish the folder (e.g. GitHub or Hugging Face).
 
@@ -12,7 +12,7 @@ A tested drop-in chat template for Qwen3.8-Flash-Next / Swift 1.5 (vLLM, SGLang,
 
 ## Short post (e.g. r/LocalLLaMA)
 
-**Title:** QFN.asgard.v1 – a tested chat template for Qwen3.8-Flash-Next / Swift 1.5 (vLLM + llama.cpp), with A/B benchmarks
+**Title:** Qwen Asgard v1 – a tested chat template for Qwen3.8-Flash-Next / Swift 1.5 (vLLM + llama.cpp), with A/B benchmarks
 
 We run Swift 1.5 (Qwen3.8-Flash-Next fine-tune) on vLLM for agentic coding. The community templates (Unsloth, froggeric, Sharp, Sharp-naze, chromix) each fix different things, but they also bundle behaviour changes you can't switch off or A/B test. So we merged them into one template and made every behaviour change an opt-in switch. Then we measured which switches actually help.
 

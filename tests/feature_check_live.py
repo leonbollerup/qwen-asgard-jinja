@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Live end-to-end feature check of QFN.asgard through a running vLLM server (OpenAI + Anthropic APIs).
+"""Live end-to-end feature check of Qwen Asgard through a running vLLM server (OpenAI + Anthropic APIs).
 Every scenario: HTTP status, rendered prompt (via /tokenize + /detokenize) where relevant, and the model's behaviour.
 
 usage: feature_check_live.py [BASE_URL] [OUTFILE]      (default http://127.0.0.1:8000, feature_check.json)

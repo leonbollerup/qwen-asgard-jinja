@@ -1,5 +1,5 @@
 # Patch for vllm/entrypoints/openai/chat_completion/serving.py: keep the chat template and the reasoning parser in
-# agreement about thinking. The qwen3 parser only reads chat_template_kwargs.enable_thinking; QFN.asgard (and
+# agreement about thinking. The qwen3 parser only reads chat_template_kwargs.enable_thinking; Qwen Asgard (and
 # Sharp-naze/froggeric-class templates) also switch thinking with reasoning_effort none/off and inline tags.
 # usage: python3 A1-thinking-off-consistency.py <vllm source root>
 import sys
@@ -29,7 +29,7 @@ new = """    def _effective_chat_template_kwargs(
             .chat_template_kwargs
         )
         # Asgard patch A1: keep the chat template and the reasoning parser in agreement about thinking.
-        # The parser only reads enable_thinking. Resolve it the way QFN.asgard does: the last inline tag in
+        # The parser only reads enable_thinking. Resolve it the way Qwen Asgard does: the last inline tag in
         # conversation order wins (<|think_off|> = off, <|think_on|> = on, an effort tag keeps enable_thinking);
         # without a tag, reasoning_effort none/off means off. Tags inside user messages that only wrap tool
         # results are data. String values ("false", "0", "off", "no") are normalised to a real bool.

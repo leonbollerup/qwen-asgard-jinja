@@ -1,5 +1,5 @@
 import json, sys
-for t in ["QFN.asgard.v1", "sharp-naze-v1.4", "swift-original"]:
+for t in ["qwen-asgard-v1", "sharp-naze-v1.4", "swift-original"]:
     L = json.load(open(f"llama-{t}.json")); R = json.load(open(f"ref-{t}.json"))
     same = diff = err = 0; fmts = set(); notes = []
     for k, v in L.items():

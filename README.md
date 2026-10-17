@@ -1,4 +1,6 @@
-# QFN.asgard.v1: a tested chat template for Qwen3.8-Flash-Next (and Swift 1.5)
+# Qwen Asgard v1: a tested chat template for Qwen3.8-Flash-Next (and Swift 1.5)
+
+*Named after Asgard, home of the Norse gods, and of the server it was forged and tested on.*
 
 A chat template for Qwen3.8-Flash-Next and its fine-tunes, for **vLLM, SGLang and llama.cpp**. Out of the box it renders **exactly the model's own prompt**, then adds the robustness fixes from the community templates. Every behaviour change is an **opt-in switch**.
 
@@ -70,7 +72,7 @@ With `terse`, `payload_rules`, `failure_notes` and `reasoning_effort: xhigh`, or
 
 The same 41 render cases were run through each Jinja engine. "Identical" means byte-identical to the transformers/jinja2 render (what vLLM uses).
 
-| Engine | QFN.asgard.v1 | Sharp-naze v1.4 | model's own template |
+| Engine | Qwen Asgard v1 | Sharp-naze v1.4 | model's own template |
 |---|---|---|---|
 | transformers / jinja2 (vLLM, SGLang) | 41/41 render | 38/41 | 24/41 |
 | `@huggingface/jinja` 0.5.1 and 0.5.10 (transformers.js and JavaScript-based apps) | 41/41 identical | 38/41 | 24/41 |
@@ -98,7 +100,7 @@ On llama.cpp the inline tag works without any patch, because the parser sees the
 - a system-only conversation (the model's template and chromix raise "No user query found");
 - assistant prefill with `continue_final_message`.
 
-**Empty `<think>` blocks.** If a client does not send reasoning back, the model's own template renders `<think>\n\n</think>` for earlier agent steps. That is the same pattern as *thinking disabled*, and it can teach the model to stop reasoning after the first tool call. QFN.asgard (like Sharp-naze/froggeric) leaves it out. With the reasoning sent back, the step is rendered exactly as it was generated.
+**Empty `<think>` blocks.** If a client does not send reasoning back, the model's own template renders `<think>\n\n</think>` for earlier agent steps. That is the same pattern as *thinking disabled*, and it can teach the model to stop reasoning after the first tool call. Qwen Asgard (like Sharp-naze/froggeric) leaves it out. With the reasoning sent back, the step is rendered exactly as it was generated.
 
 ## Benchmark results
 
@@ -123,7 +125,7 @@ _Swift 1.5 AWQ on 2× CMP 170HX, vLLM, temperature 1.0 / top_p 0.95 / top_k 20, 
 - Sharp's payload rules and failure notes tend to hurt.
 - `terse` makes coding answers much shorter at no measurable cost on EvalPlus, but it was only tested together with the other two.
 
-**Final version, measured again in an independent run** (QFN.asgard.v1 with `tool_prompt: chromix` on vLLM with patches A1/A2):
+**Final version, measured again in an independent run** (Qwen Asgard v1 with `tool_prompt: chromix` on vLLM with patches A1/A2):
 - BFCL 80.3%: **+1.4 points** vs the defaults (CI +0.0 … +2.9). This replicates the chromix effect.
 - EvalPlus 86.5% and long context 97.2%, both inside the noise.
 - Live feature check: 29/29.
@@ -141,7 +143,7 @@ _Swift 1.5 AWQ on 2× CMP 170HX, vLLM, temperature 1.0 / top_p 0.95 / top_k 20, 
 **vLLM:**
 
 ```bash
-vllm serve <model> --chat-template QFN.asgard.v1.jinja \
+vllm serve <model> --chat-template qwen-asgard-v1.jinja \
   --reasoning-parser qwen3 --enable-auto-tool-choice --tool-call-parser qwen3_xml \
   --default-chat-template-kwargs '{"reasoning_effort":"medium","tool_prompt":"chromix"}'
 ```
@@ -151,7 +153,7 @@ vllm serve <model> --chat-template QFN.asgard.v1.jinja \
 **llama.cpp:**
 
 ```bash
-llama-server -m <model.gguf> --jinja --chat-template-file QFN.asgard.v1.jinja \
+llama-server -m <model.gguf> --jinja --chat-template-file qwen-asgard-v1.jinja \
   --chat-template-kwargs '{"reasoning_effort":"medium","tool_prompt":"chromix"}'
 ```
 
@@ -180,7 +182,7 @@ One real problem and one minor gap sit in vLLM, not in any template. Patches are
 
 | Path | Contents |
 |---|---|
-| `QFN.asgard.v1.jinja` | the template |
+| `qwen-asgard-v1.jinja` | the template |
 | `vllm-patches/` | A1 and A2 for vLLM |
 | `tests/` | render tests, live feature check, render benchmark |
 | `tests/reference/` | the official template, Sharp-naze v1.4 and chromix v1, used for byte-for-byte comparisons |
@@ -209,7 +211,7 @@ python tests/test_tool_prompt.py TOKENIZER_DIR
 ```
 
 ```bash
-python tests/test_a1_consistency.py TOKENIZER_DIR QFN.asgard.v1.jinja vllm-patches/A1-thinking-off-consistency.py
+python tests/test_a1_consistency.py TOKENIZER_DIR qwen-asgard-v1.jinja vllm-patches/A1-thinking-off-consistency.py
 ```
 
 - **`tests/render_tests.py`** compares against the reference templates in `tests/reference/`.
@@ -236,7 +238,7 @@ python tests/test_a1_consistency.py TOKENIZER_DIR QFN.asgard.v1.jinja vllm-patch
 
 The template is rendered on the CPU for every request. Times are for transformers/jinja2, the median of 3 runs:
 
-| Session | model's own | Sharp-naze v1.4 base | QFN.asgard.v1 |
+| Session | model's own | Sharp-naze v1.4 base | Qwen Asgard v1 |
 |---|---|---|---|
 | 302 messages (150 tool steps) | 7.8 ms | 29.5 ms | **21.0 ms** |
 | 402 messages (100 steps × 3 parallel calls) | 11.6 ms | 47.7 ms | **40.9 ms** |
@@ -265,4 +267,4 @@ This template stands on the work of:
   - **peculiar-ragdoll**, for the [Sharp terseness block](https://huggingface.co/peculiar-ragdoll/Qwen-Sharp-Chat-Templates) (Apache-2.0).
   - [vllm-project/vllm#61206](https://github.com/vllm-project/vllm/issues/61206), for the parallel tool-result ordering problem.
 
-QFN.asgard is the merge, the switches, the A/B benchmarks, the audit and the fixes: Leon Bollerup, 2026-10-17.
+Qwen Asgard is the merge, the switches, the A/B benchmarks, the audit and the fixes: Leon Bollerup, 2026-10-17.

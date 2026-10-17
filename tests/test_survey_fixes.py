@@ -6,7 +6,7 @@ from pathlib import Path
 from transformers import AutoTokenizer
 
 tok = AutoTokenizer.from_pretrained(sys.argv[1])
-T = Path(sys.argv[2] if len(sys.argv) > 2 else Path(__file__).resolve().parent.parent / "QFN.asgard.v1.jinja").read_text()
+T = Path(sys.argv[2] if len(sys.argv) > 2 else Path(__file__).resolve().parent.parent / "qwen-asgard-v1.jinja").read_text()
 IM_START = tok.convert_tokens_to_ids("<|im_start|>")
 TOOLS = [{"type": "function", "function": {"name": "get", "description": "Get a value",
           "parameters": {"type": "object", "properties": {"k": {"type": "string"}}, "required": ["k"]}}}]

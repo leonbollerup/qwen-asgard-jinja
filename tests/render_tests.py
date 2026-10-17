@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render tests for QFN.asgard.v1.jinja. usage: python tests/render_tests.py TOKENIZER_DIR (needs transformers)."""
+"""Render tests for qwen-asgard-v1.jinja. usage: python tests/render_tests.py TOKENIZER_DIR (needs transformers)."""
 import difflib, itertools, json, sys
 from pathlib import Path
 from transformers import AutoTokenizer
@@ -7,7 +7,7 @@ from transformers import AutoTokenizer
 tok = AutoTokenizer.from_pretrained(sys.argv[1])
 ROOT = Path(__file__).resolve().parent.parent
 REF = ROOT / "tests" / "reference"
-M = (ROOT / "QFN.asgard.v1.jinja").read_text()
+M = (ROOT / "qwen-asgard-v1.jinja").read_text()
 ORIG = (REF / "qwen3.8-flash-next-official.jinja").read_text()
 SHARP = (REF / "sharp-naze-v1.4.jinja").read_text() if (REF / "sharp-naze-v1.4.jinja").exists() else None  # removed from HF on 2026-10-16
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exhaustive check that vLLM patch A1 and QFN.asgard agree on thinking on/off.
+"""Exhaustive check that vLLM patch A1 and Qwen Asgard agree on thinking on/off.
 For every enable_thinking x reasoning_effort x inline tag (x tag position) combination: run A1's logic on the request
 kwargs, render the template with the resulting kwargs (as vLLM does), and compare the template's decision (generation
 prompt with an empty think block = off) with the parser's view (enable_thinking, default true).

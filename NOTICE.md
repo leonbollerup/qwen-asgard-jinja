@@ -1,6 +1,6 @@
 # Notice
 
-**QFN.asgard.v1.jinja** is a derivative of the Qwen3.8-Flash-Next chat template and is distributed under the **Qwen Community License 1.0** (see `LICENSE`, copyright (c) 2026 Qwen). Please read its conditions before commercial use, in particular:
+**qwen-asgard-v1.jinja** is a derivative of the Qwen3.8-Flash-Next chat template and is distributed under the **Qwen Community License 1.0** (see `LICENSE`, copyright (c) 2026 Qwen). Please read its conditions before commercial use, in particular:
 - the model name must be displayed above 100M monthly active users or US$20M monthly revenue;
 - a separate licence is needed for Model-as-a-Service and AI Work Assistant businesses.
 
