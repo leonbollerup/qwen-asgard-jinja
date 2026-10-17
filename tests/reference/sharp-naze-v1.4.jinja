@@ -1,0 +1,432 @@
+{#- chat_template_v1.jinja — Qwen3.8-Flash-Next external template, v1 (2026-08-28)
+    Base: the GGUF-embedded Unsloth-fixed template (byte-identical except the fixes below).
+    Grafts three froggeric-v22-class fixes (see froggeric/Qwen-Fixed-Chat-Templates):
+      F1 Empty-think poisoning cure: assistant history turns with no reasoning render
+         WITHOUT a blank <think>\n\n</think> block; a leading in-content <think> block is
+         extracted into reasoning when reasoning_content is absent, and stripped (de-dup)
+         when reasoning_content is present.
+      F2 Reasoning-effort aliases instead of raise_exception: high/max/ultracode/extreme
+         -> xhigh, minimal -> low, none/off -> thinking disabled, unknown -> xhigh default.
+      F3 Stringified-JSON tool_call.arguments render verbatim (best effort) instead of
+         crashing the whole request; other non-mapping argument types render via tojson.
+    Revision 2026-08-28 (post pomodoro corruption event — edit-call JSON debris written
+    into the source file, plus hallucinated closing tags in tool args):
+      F4 Two-tier consecutive tool-failure escalation (froggeric v22.3-style): strong
+         structural error signals in tool responses increment a counter; 1st failure
+         appends a diagnose-first note, 2nd+ appends an urgent change-course directive.
+         Detection is a pure function of response content, so re-renders stay KV-stable.
+      F5 Payload-discipline bullets added to the <IMPORTANT> tools block: parameter
+         values are literal content only (no XML tags, no JSON fragments of prior tool
+         calls), and failed calls must not be resent unchanged.
+    Revision 2026-08-31 (v1.1, reviewed against froggeric v22.4 / Sharp v22.4.0):
+      F4 fix 1 — detection is now case-folded, two-windowed (head 120 / tail 160),
+         and excludes code/search output and success envelopes, so a traceback inside
+         a grep hit no longer escalates a successful call while pi's tail-placed
+         "Command exited with code N" still does. Tiering from froggeric v22.3/v22.4,
+         thresholds calibrated on 248 real pi tool results: 100% recall, 88% precision
+         (vs 67%/82% for v1.0 and 48%/67% for froggeric's head-only scan).
+      F4 fix 2 — a genuine user turn resets the consecutive-failure counter; two
+         unrelated failures separated by a real user turn no longer render as a streak.
+    Revision 2026-08-31 (v1.3): lifts from froggeric v22.4 for parts we had not built.
+      F6 reasoning extraction now also reads `reasoning` (vLLM OAI / Responses API) and
+         `thinking` (Anthropic, string or blocks), first non-empty field wins.
+      F7 inline sticky effort tags (<|think_off|on|low|minimal|medium|high|xhigh|max|
+         ultracode|extreme|>), last one in conversation order wins, stripped before
+         render. The only per-request effort control pi can actually reach.
+    Revision 2026-10-15 (v1.4), from the 2026-10-15 template survey (froggeric v22.5 is
+    still the latest; Unsloth and Qwen templates unchanged since 2026-08-26):
+      F1 fix 1 — think-off history keeps the blank <think>\n\n</think> block, so each
+         think-off request extends the previous one token for token. v1.0-v1.3 rendered
+         those turns plain and broke the prefix (froggeric dropped that gate in v22.3).
+      F1 fix 2 — "R\n</think>\n\nA" content with no <think> opener is split into
+         reasoning + content when the message has no reasoning field (SGLang #40959
+         failure shape: the model emitting a visible </think>).
+    Variant 2026-10-16 (v1.4-sharp): v1.4 plus the terseness block from Sharp v22.5.0
+      (peculiar-ragdoll/Qwen-Sharp-Chat-Templates, Apache-2.0), appended after the caller's
+      system prompt; the lead line follows thinking on/off as in Sharp. Toggle with the
+      `terse` chat-template kwarg: default true, {"terse": false} renders exactly v1.4.
+      Nothing else from Sharp is taken (effort default stays xhigh).
+    Generation-prompt shapes, tool-call format, and healthy think-mode history rendering
+    are byte-identical to the embedded template (KV-parity for well-formed sessions).
+    Use via: llama-server ... --jinja --chat-template-file <this file>
+    Default template of start-qwen-flash-next.sh (since 2026-09-01) and start-swift-flash-next.sh;
+    CHAT_TEMPLATE_FILE= (empty) selects the GGUF-embedded one. -#}
+{%- set image_count = namespace(value=0) %}
+{%- set video_count = namespace(value=0) %}
+{%- macro render_content(content, do_vision_count, is_system_content=false) %}
+    {%- if content is string %}
+        {{- content }}
+    {%- elif content is iterable and content is not mapping %}
+        {%- for item in content %}
+            {%- if 'image' in item or 'image_url' in item or item.type == 'image' %}
+                {%- if is_system_content %}
+                    {{- raise_exception('System message cannot contain images.') }}
+                {%- endif %}
+                {%- if do_vision_count %}
+                    {%- set image_count.value = image_count.value + 1 %}
+                {%- endif %}
+                {%- if add_vision_id %}
+                    {{- 'Picture ' ~ image_count.value ~ ': ' }}
+                {%- endif %}
+                {{- '<|vision_start|><|image_pad|><|vision_end|>' }}
+            {%- elif 'video' in item or item.type == 'video' %}
+                {%- if is_system_content %}
+                    {{- raise_exception('System message cannot contain videos.') }}
+                {%- endif %}
+                {%- if do_vision_count %}
+                    {%- set video_count.value = video_count.value + 1 %}
+                {%- endif %}
+                {%- if add_vision_id %}
+                    {{- 'Video ' ~ video_count.value ~ ': ' }}
+                {%- endif %}
+                {{- '<|vision_start|><|video_pad|><|vision_end|>' }}
+            {%- elif 'text' in item %}
+                {{- item.text }}
+            {%- else %}
+                {{- raise_exception('Unexpected item type in content.') }}
+            {%- endif %}
+        {%- endfor %}
+    {%- elif content is none or content is undefined %}
+        {{- '' }}
+    {%- else %}
+        {{- raise_exception('Unexpected content type.') }}
+    {%- endif %}
+{%- endmacro %}
+{%- if not messages %}
+    {{- raise_exception('No messages provided.') }}
+{%- endif %}
+{%- set sysns = namespace(count=0, text='') %}
+{%- for message in messages %}
+    {%- if sysns.count == loop.index0 and (message.role == 'system' or message.role == 'developer') %}
+        {%- set sys_content = render_content(message.content, false, true)|trim %}
+        {%- if '<|think_' in sys_content %}
+            {%- set scns = namespace(t=sys_content) %}
+            {%- for tag in ['<|think_off|>', '<|think_on|>', '<|think_low|>', '<|think_minimal|>', '<|think_medium|>', '<|think_high|>', '<|think_xhigh|>', '<|think_max|>', '<|think_ultracode|>', '<|think_extreme|>'] %}
+                {%- if tag in scns.t %}
+                    {%- set scns.t = scns.t.split(tag)|join('') %}
+                {%- endif %}
+            {%- endfor %}
+            {%- set sys_content = scns.t|trim %}
+        {%- endif %}
+        {%- if sys_content %}
+            {%- set sysns.text = sysns.text + ('\n' if sysns.text else '') + sys_content %}
+        {%- endif %}
+        {%- set sysns.count = sysns.count + 1 %}
+    {%- endif %}
+{%- endfor %}
+{%- set num_sys = sysns.count %}
+{%- set merged_system = sysns.text %}
+{#- F7: inline effort tags. pi's thinkingFormat only sends enable_thinking /
+    preserve_thinking, so a tag typed into a message is the only per-request effort
+    control available. Sticky: the LAST tag in conversation order wins and stays in
+    effect for later turns. Tags are stripped before rendering (split/join, never
+    replace -- minja drops the whole payload when replace matches at index 0).
+    Conservative on/off: a tag can raise or lower effort, but an explicit
+    enable_thinking=false is only overridden by <|think_on|>. A tag changes the system
+    block, so introducing one costs a prefix reprocess -- expected, not a bug. -#}
+{%- set tagns = namespace(effort='') %}
+{%- for message in messages %}
+    {%- if message.role == 'user' or message.role == 'system' or message.role == 'developer' %}
+        {%- set tc = render_content(message.content, false) %}
+        {%- if '<|think_' in tc %}
+            {%- for tag in ['<|think_off|>', '<|think_on|>', '<|think_low|>', '<|think_minimal|>', '<|think_medium|>', '<|think_high|>', '<|think_xhigh|>', '<|think_max|>', '<|think_ultracode|>', '<|think_extreme|>'] %}
+                {%- if tag in tc %}
+                    {%- if tag == '<|think_off|>' %}
+                        {%- set tagns.effort = 'off' %}
+                    {%- elif tag == '<|think_on|>' %}
+                        {%- set tagns.effort = 'on' %}
+                    {%- elif tag == '<|think_low|>' or tag == '<|think_minimal|>' %}
+                        {%- set tagns.effort = 'low' %}
+                    {%- elif tag == '<|think_medium|>' %}
+                        {%- set tagns.effort = 'medium' %}
+                    {%- else %}
+                        {%- set tagns.effort = 'xhigh' %}
+                    {%- endif %}
+                {%- endif %}
+            {%- endfor %}
+        {%- endif %}
+    {%- endif %}
+{%- endfor %}
+{#- F2: resolve thinking on/off and effort with aliases; never raise. -#}
+{%- set think_enabled = true %}
+{%- if enable_thinking is defined and enable_thinking is false %}
+    {%- set think_enabled = false %}
+{%- endif %}
+{%- if tagns.effort == 'off' %}
+    {%- set think_enabled = false %}
+{%- elif tagns.effort == 'on' %}
+    {%- set think_enabled = true %}
+{%- endif %}
+{%- set reasoning_instructions = '' %}
+{%- if think_enabled %}
+    {%- if tagns.effort and tagns.effort != 'off' and tagns.effort != 'on' %}
+        {%- set resolved_reasoning_effort = tagns.effort %}
+    {%- else %}
+        {%- set resolved_reasoning_effort = reasoning_effort|default('xhigh')|lower %}
+    {%- endif %}
+    {%- if resolved_reasoning_effort in ('high', 'max', 'ultracode', 'extreme') %}
+        {%- set resolved_reasoning_effort = 'xhigh' %}
+    {%- elif resolved_reasoning_effort == 'minimal' %}
+        {%- set resolved_reasoning_effort = 'low' %}
+    {%- endif %}
+    {%- if resolved_reasoning_effort in ('none', 'off') %}
+        {%- set think_enabled = false %}
+    {%- elif resolved_reasoning_effort not in ('xhigh', 'medium', 'low') %}
+        {%- set resolved_reasoning_effort = 'xhigh' %}
+    {%- endif %}
+{%- endif %}
+{%- if think_enabled %}
+    {%- if resolved_reasoning_effort == 'xhigh' %}
+        {%- set reasoning_instructions = 'Reasoning effort is set to xhigh. Please think carefully through the task, validate key assumptions, consider plausible alternatives, and prioritize correctness, consistency, and clarity in the final answer.' %}
+    {%- elif resolved_reasoning_effort == 'low' %}
+        {%- set reasoning_instructions = 'Reasoning effort is set to low. Keep your thinking brief and focused, moving directly to the conclusion without unnecessary elaboration.' %}
+    {%- endif %}
+{%- endif %}
+{#- Sharp v22.5.0 terseness block, appended after the caller's system prompt. `terse`
+    kwarg: default true; {"terse": false} leaves the system prompt exactly as v1.4. -#}
+{%- if think_enabled %}
+    {%- set _terse_lead = 'Answer directly, after thinking. Lead with the answer, then only what it needs to be correct and usable.' %}
+{%- else %}
+    {%- set _terse_lead = 'Answer directly and concisely. Give the answer with only what it needs to be correct and usable.' %}
+{%- endif %}
+{%- set _terse_core %}
+Never: open with preamble or pleasantries; restate the question; add filler transitions; hedge with niceties; or repeat a point you've already made.
+Always: keep essential steps, caveats, uncertainties, and specifics — never drop correctness or a needed warning for brevity. Keep the final answer lean. Use the least structure that conveys it (plain prose when short; lists or code only when they earn their place). If genuinely uncertain, say so and explain why — never omit uncertainty for the sake of brevity.
+If a user request is genuinely ambiguous, ask a sharp question, don't guess.
+{%- endset %}
+{%- set _terse = _terse_lead ~ '\n' ~ (_terse_core | trim) %}
+{%- set _terse_on = terse if terse is defined else true %}
+{%- if _terse_on %}
+    {%- if merged_system %}
+        {%- set merged_system = (merged_system | trim) ~ '\n\n' ~ (_terse | trim) %}
+    {%- else %}
+        {%- set merged_system = _terse | trim %}
+    {%- endif %}
+{%- endif %}
+{%- if tools and tools is iterable and tools is not mapping %}
+    {{- '<|im_start|>system\n' }}
+    {%- if reasoning_instructions %}
+        {{- reasoning_instructions + '\n\n' }}
+    {%- endif %}
+    {{- "# Tools\n\nYou have access to the following functions:\n\n<tools>" }}
+    {%- for tool in tools %}
+        {{- "\n" }}
+        {{- tool | tojson }}
+    {%- endfor %}
+    {{- "\n</tools>" }}
+    {{- '\n\nIf you choose to call a function ONLY reply in the following format with NO suffix:\n\n<tool_call>\n<function=example_function_name>\n<parameter=example_parameter_1>\nvalue_1\n</parameter>\n<parameter=example_parameter_2>\nThis is the value for the second parameter\nthat can span\nmultiple lines\n</parameter>\n</function>\n</tool_call>\n\n<IMPORTANT>\nReminder:\n- Function calls MUST follow the specified format: an inner <function=...></function> block must be nested within <tool_call></tool_call> XML tags\n- Required parameters MUST be specified\n- Parameter values are LITERAL content only: never place XML tags, fragments of this or any previous tool call (such as \"lines\": or \"end\":), or format metadata inside a <parameter=...> value\n- If a tool result reports an error or a warning, identify the cause and change your approach; never resend a failing call unchanged\n- You may provide optional reasoning for your function call in natural language BEFORE the function call, but NOT after\n- If there is no function call available, answer the question like normal with your current knowledge and do not tell the user about function calls\n</IMPORTANT>' }}
+    {%- if merged_system %}
+        {{- '\n\n' + merged_system }}
+    {%- endif %}
+    {{- '<|im_end|>\n' }}
+{%- else %}
+    {%- if merged_system %}
+        {{- '<|im_start|>system\n' + (reasoning_instructions + '\n\n' if reasoning_instructions else '')  + merged_system + '<|im_end|>\n' }}
+    {%- elif reasoning_instructions %}
+        {{- '<|im_start|>system\n' + reasoning_instructions + '<|im_end|>\n' }}
+    {%- endif %}
+{%- endif %}
+{%- set ns = namespace(multi_step_tool=true, last_query_index=messages|length - 1) %}
+{%- set errns = namespace(consec=0) %}
+{%- for message in messages[::-1] %}
+    {%- set index = (messages|length - 1) - loop.index0 %}
+    {%- if ns.multi_step_tool and message.role == "user" %}
+        {%- set content = render_content(message.content, false)|trim %}
+        {%- if not(content.startswith('<tool_response>') and content.endswith('</tool_response>')) %}
+            {%- set ns.multi_step_tool = false %}
+            {%- set ns.last_query_index = index %}
+        {%- endif %}
+    {%- endif %}
+{%- endfor %}
+{%- for message in messages %}
+    {%- if loop.index0 >= num_sys %}
+    {%- set content = render_content(message.content, true)|trim %}
+    {%- if (message.role == "user" or message.role == "system" or message.role == "developer") and '<|think_' in content %}
+        {%- set ucns = namespace(t=content) %}
+        {%- for tag in ['<|think_off|>', '<|think_on|>', '<|think_low|>', '<|think_minimal|>', '<|think_medium|>', '<|think_high|>', '<|think_xhigh|>', '<|think_max|>', '<|think_ultracode|>', '<|think_extreme|>'] %}
+            {%- if tag in ucns.t %}
+                {%- set ucns.t = ucns.t.split(tag)|join('') %}
+            {%- endif %}
+        {%- endfor %}
+        {%- set content = ucns.t|trim %}
+    {%- endif %}
+    {%- if message.role == "system" or message.role == "developer" %}
+        {{- raise_exception('System message must be at the beginning.') }}
+    {%- elif message.role == "user" %}
+        {#- F4 fix (v1.1): a genuine user turn ends any tool-failure streak. A tool
+            result wrapped in a user message does NOT — same predicate the
+            last_query_index scan uses above. -#}
+        {%- if not (content.startswith('<tool_response>') and content.endswith('</tool_response>')) %}
+            {%- set errns.consec = 0 %}
+        {%- endif %}
+        {{- '<|im_start|>' + message.role + '\n' + content + '<|im_end|>' + '\n' }}
+    {%- elif message.role == "assistant" %}
+        {#- F6: reasoning may arrive in three fields. OpenAI/llama.cpp use
+            reasoning_content; vLLM's OAI endpoint and the Responses API use
+            reasoning; Anthropic uses thinking (string, or blocks carrying .thinking
+            or .text). First non-empty wins. NOTE (measured 2026-08-31 against
+            llama-server /apply-template): llama.cpp forwards ONLY reasoning_content to
+            the template and drops the other two, so the extra branches are inert under
+            our runtime — kept for direct template use and other engines, at zero cost
+            since they are guarded. -#}
+        {%- set rns = namespace(text='') %}
+        {%- if message.reasoning_content is defined and message.reasoning_content is string %}
+            {%- set rns.text = message.reasoning_content %}
+        {%- endif %}
+        {%- if not rns.text and message.reasoning is defined and message.reasoning is string %}
+            {%- set rns.text = message.reasoning %}
+        {%- endif %}
+        {%- if not rns.text and message.thinking is defined and message.thinking is not none %}
+            {%- if message.thinking is string %}
+                {%- set rns.text = message.thinking %}
+            {%- elif message.thinking is iterable and message.thinking is not mapping %}
+                {%- for tpart in message.thinking %}
+                    {%- if tpart is mapping and tpart.thinking is defined and tpart.thinking is string %}
+                        {%- set rns.text = rns.text + tpart.thinking %}
+                    {%- elif tpart is mapping and tpart.text is defined and tpart.text is string %}
+                        {%- set rns.text = rns.text + tpart.text %}
+                    {%- elif tpart is string %}
+                        {%- set rns.text = rns.text + tpart %}
+                    {%- endif %}
+                {%- endfor %}
+            {%- endif %}
+        {%- endif %}
+        {%- set reasoning_content = rns.text|trim %}
+        {#- F1: extract a leading in-content <think> block (clients that do not split
+            reasoning), or strip it when reasoning_content already carries it (de-dup). -#}
+        {%- if content.startswith('<think>') and '</think>' in content %}
+            {%- set think_parts = content.split('</think>') %}
+            {%- if not reasoning_content %}
+                {%- set reasoning_content = think_parts[0][7:]|trim %}
+            {%- endif %}
+            {%- set content = think_parts[1:]|join('</think>')|trim %}
+        {#- F1 (v1.4): a closing tag with no opener (the generation prompt already opened
+            <think>, so a client whose reasoning split failed returns "R\n</think>\n\nA").
+            Only when no reasoning field exists: </think> is not a special token, so prose
+            containing it would otherwise be mis-split. Splits at the FIRST marker. -#}
+        {%- elif not reasoning_content and (content.startswith('</think>') or '\n</think>' in content) %}
+            {%- set think_end = '\n</think>' %}
+            {%- if content.startswith('</think>') %}
+                {%- set think_end = '</think>' %}
+            {%- endif %}
+            {%- set think_parts = content.split(think_end) %}
+            {%- set reasoning_content = think_parts[0]|trim %}
+            {%- set content = think_parts[1:]|join(think_end)|trim %}
+        {%- endif %}
+        {#- F1: never render a blank think block in think mode — empty reasoning renders
+            plain. Think-off (v1.4) keeps the blank block: it is what the generation prompt
+            emitted, so dropping it broke the next request's prefix (froggeric v22.3, HF #80). -#}
+        {%- if (reasoning_content or not think_enabled) and (preserve_thinking is undefined or preserve_thinking is true or loop.index0 > ns.last_query_index) %}
+            {{- '<|im_start|>' + message.role + '\n<think>\n' + reasoning_content + '\n</think>\n\n' + content }}
+        {%- else %}
+            {{- '<|im_start|>' + message.role + '\n' + content }}
+        {%- endif %}
+        {%- if message.tool_calls and message.tool_calls is iterable and message.tool_calls is not mapping %}
+            {%- for tool_call in message.tool_calls %}
+                {%- if tool_call.function is defined %}
+                    {%- set tool_call = tool_call.function %}
+                {%- endif %}
+                {%- if tool_call.name is not defined or tool_call.name is none %}
+                    {{- raise_exception('Tool call is missing a function name.') }}
+                {%- endif %}
+                {%- if loop.first %}
+                    {%- if content|trim %}
+                        {{- '\n\n<tool_call>\n<function=' + tool_call.name + '>\n' }}
+                    {%- else %}
+                        {{- '<tool_call>\n<function=' + tool_call.name + '>\n' }}
+                    {%- endif %}
+                {%- else %}
+                    {{- '\n<tool_call>\n<function=' + tool_call.name + '>\n' }}
+                {%- endif %}
+                {%- if tool_call.arguments is mapping %}
+                    {%- for args_name, args_value in tool_call.arguments|items %}
+                        {{- '<parameter=' + args_name + '>\n' }}
+                        {%- set args_value = args_value | string if args_value is string else args_value | tojson | safe %}
+                        {{- args_value }}
+                        {{- '\n</parameter>\n' }}
+                    {%- endfor %}
+                {%- elif tool_call.arguments is string %}
+                    {#- F3: some clients send arguments as a JSON string; render it verbatim
+                        as a best-effort fallback instead of crashing the render. NOTE
+                        (measured 2026-08-31 against llama-server /apply-template): llama.cpp
+                        normalises string arguments into a mapping before templating, so under
+                        our runtime this branch is a safety net, not the active path. It earns
+                        its keep only for engines that pass the string through. -#}
+                    {%- if tool_call.arguments|trim %}
+                        {{- tool_call.arguments|trim }}
+                        {{- '\n' }}
+                    {%- endif %}
+                {%- elif tool_call.arguments is defined and tool_call.arguments is not none %}
+                    {{- tool_call.arguments | tojson }}
+                    {{- '\n' }}
+                {%- endif %}
+                {{- '</function>\n</tool_call>' }}
+            {%- endfor %}
+        {%- endif %}
+        {{- '<|im_end|>\n' }}
+    {%- elif message.role == "tool" %}
+        {%- if loop.previtem and loop.previtem.role != "tool" %}
+            {{- '<|im_start|>user' }}
+        {%- endif %}
+        {{- '\n<tool_response>\n' }}
+        {{- content }}
+        {#- F4 (v1.2): tiering from froggeric v22.4, then CALIBRATED against 248 real
+            pi tool results (21 isError) harvested from the 2026-08-28/29 sessions.
+            pi sends tool results as role:"tool" with the flat text as content
+            (pi-ai/dist/api/openai-completions.js:958), so this branch is the right
+            place. pi puts its markers in two places, hence two windows: its own guard
+            messages LEAD the payload, while a failed bash command reports
+            "Command exited with code N" at the very END, after all the output.
+            Head-only scanning misses those — measured recall 48% (head-only) vs 67%
+            (the v1.0 whole-body rule) vs 100% at 88% precision for head+tail below,
+            where every remaining fire is a genuine failure pi itself labelled
+            isError=false. The weak tier is line-anchored (a head line whose first
+            colon-token ends in 'error') so 'ModuleNotFoundError:' fires while Chrome's
+            '[25044:...:ERROR:base/...' log noise does not. Deterministic per payload
+            — KV-stable. -#}
+        {%- set err_low = content|lower %}
+        {%- set err_head = err_low[0:120] %}
+        {%- set err_tail = err_low if err_low|length <= 160 else err_low[err_low|length - 160:] %}
+        {%- set err_is_code = ('throw new ' in err_low or 'throw error' in err_low or 'console.error' in err_low or 'logger.error' in err_low or 'logging.error' in err_low or 'import ' in err_head or 'def ' in err_head or 'function ' in err_head) %}
+        {%- set err_exit_zero = ('exit code: 0' in err_tail or 'process exited with code 0' in err_tail or 'command exited with code 0' in err_tail) %}
+        {%- set err_field_ok = ('"error": null' in err_head or '"error":null' in err_head or '"error": false' in err_head or '"error":false' in err_head or '"error": ""' in err_head or '"error":""' in err_head) %}
+        {%- set err_strong_head = (('"error":' in err_head and not err_field_ok) or '"status": "error"' in err_head or '"status":"error"' in err_head or '[e_' in err_head or 'traceback (most recent call last):' in err_head or 'command not found' in err_head or 'file not found:' in err_head or 'invalid syntax' in err_head or 'fatal:' in err_head or 'declined by user' in err_head or 'blocked by permission gate' in err_head or 'path is a directory' in err_head or 'command aborted' in err_head or err_head.startswith('exception:') or err_head.startswith('failed to ')) %}
+        {%- set err_strong_tail = (('exit code: ' in err_tail or 'process exited with code' in err_tail or 'command exited with code' in err_tail) and not err_exit_zero) %}
+        {%- set errweak = namespace(hit=('err!' in err_head)) %}
+        {%- for err_line in err_head.split('\n') %}
+            {%- set err_tok = err_line.split(':')[0]|trim %}
+            {%- if err_tok and err_tok.endswith('error') %}
+                {%- set errweak.hit = true %}
+            {%- endif %}
+        {%- endfor %}
+        {%- set err_weak_suppressed = ('$ ' in err_head or 'took ' in err_head or content|length >= 600) %}
+        {%- if err_strong_tail or ((not err_is_code) and (err_strong_head or (errweak.hit and not err_weak_suppressed))) %}
+            {%- set errns.consec = errns.consec + 1 %}
+        {%- else %}
+            {%- set errns.consec = 0 %}
+        {%- endif %}
+        {%- if errns.consec == 1 %}
+            {{- '\n\n[system note: this tool call failed. Diagnose the cause before the next call; do not resend the same call unchanged.]' }}
+        {%- elif errns.consec >= 2 %}
+            {{- '\n\n[SYSTEM WARNING: ' ~ errns.consec ~ ' consecutive tool failures. Stop repeating the same approach. Re-read the current state and take a fundamentally different action.]' }}
+        {%- endif %}
+        {{- '\n</tool_response>' }}
+        {%- if not loop.last and loop.nextitem.role != "tool" %}
+            {{- '<|im_end|>\n' }}
+        {%- elif loop.last %}
+            {{- '<|im_end|>\n' }}
+        {%- endif %}
+    {%- else %}
+        {{- raise_exception('Unexpected message role.') }}
+    {%- endif %}
+    {%- endif %}
+{%- endfor %}
+{%- if add_generation_prompt %}
+    {{- '<|im_start|>assistant\n' }}
+    {%- if not think_enabled %}
+        {{- '<think>\n\n</think>\n\n' }}
+    {%- else %}
+        {{- '<think>\n' }}
+    {%- endif %}
+{%- endif %}
+{#- Unsloth fixes - developer role, merged system messages, tool calling. v1 external grafts: F1 empty-think cure, F2 effort aliases, F3 string tool args, F4 tool-failure escalation, F5 payload-discipline bullets, F6 reasoning/thinking field extraction, F7 inline effort tags; v1.4 think-off prefix parity + opener-less </think> split; v1.4-sharp: Sharp v22.5.0 terseness block (`terse` kwarg, default on). -#}
