@@ -191,7 +191,6 @@ One real problem and one minor gap sit in vLLM, not in any template. Patches are
 | `tests/` | render tests, live feature check, render benchmark |
 | `tests/reference/` | the official template, Sharp-naze v1.4 and chromix v1, used for byte-for-byte comparisons |
 | `tests/portability/` | cross-engine tests (transformers, `@huggingface/jinja`, llama.cpp) |
-| `docs/ANNOUNCEMENT.md` | introduction texts |
 | `LICENSE`, `NOTICE.md` | licence and third-party credits |
 
 ## Tests
