@@ -6,7 +6,7 @@ Replace `<LINK>` with the place you publish the folder (e.g. GitHub or Hugging F
 
 ## One-liner (HF description, GitHub repo "About")
 
-A tested drop-in chat template for Qwen3.8-Flash-Next / Swift 1.5 (vLLM, SGLang, llama.cpp). It renders the model's own prompt and fixes the requests that break other templates. Opt-in switches are A/B-benchmarked; the best one is +1.4 BFCL points.
+A tested drop-in chat template for Qwen3.8-Flash-Next / Swift 1.5 (vLLM, SGLang, llama.cpp). It keeps the model's own prompt format with the tool instructions that measured best (+1.4 BFCL points), and fixes the requests that break other templates. All switches are A/B-benchmarked.
 
 ---
 
@@ -17,7 +17,7 @@ A tested drop-in chat template for Qwen3.8-Flash-Next / Swift 1.5 (vLLM, SGLang,
 We run Swift 1.5 (Qwen3.8-Flash-Next fine-tune) on vLLM for agentic coding. The community templates (Unsloth, froggeric, Sharp, Sharp-naze, chromix) each fix different things, but they also bundle behaviour changes you can't switch off or A/B test. So we merged them into one template and made every behaviour change an opt-in switch. Then we measured which switches actually help.
 
 **What it is**
-- **Defaults** = the model's own prompt, byte for byte, plus robustness fixes.
+- **Defaults:** the model's own prompt format, with the tool instructions that measured best (chromix's rewrite, +1.4 BFCL points), plus robustness fixes. `tool_prompt: "qwen"` gives the model's own prompt byte for byte.
 - **Every extra is a switch**, per request (`chat_template_kwargs`) or server-wide (`--default-chat-template-kwargs`).
 
 **Fixes that every upstream template we tested lacks**
@@ -44,8 +44,8 @@ We run Swift 1.5 (Qwen3.8-Flash-Next fine-tune) on vLLM for agentic coding. The 
 
 | Template variant | BFCL | Δ |
 |---|---|---|
-| model's own prompt (defaults) | 78.9% | |
-| `tool_prompt: chromix` (chromix's rewritten tool instructions) | **80.2% / 80.3%** | **+1.3 / +1.4** (two independent runs) |
+| model's own prompt (`tool_prompt: qwen`) | 78.9% | |
+| chromix's rewritten tool instructions (**the default**) | **80.2% / 80.3%** | **+1.3 / +1.4** (two independent runs) |
 | Sharp payload rules + failure notes | 78.1% | −0.8 |
 | strict tool-format rules only | 78.8% | −0.1 |
 
@@ -62,7 +62,7 @@ We run Swift 1.5 (Qwen3.8-Flash-Next fine-tune) on vLLM for agentic coding. The 
 - Renders ~30% faster than the template it is based on.
 - Tests, the vLLM patches and a live feature check (29/29 on our server) are in the repo.
 
-**Recommended vLLM setting:** `--default-chat-template-kwargs '{"reasoning_effort":"medium","tool_prompt":"chromix"}'`
+**Recommended vLLM setting:** `--default-chat-template-kwargs '{"reasoning_effort":"medium"}'`. The best tool text is already the default.
 
 **Credits.** This builds directly on:
 - **nazeshinjite**, whose [Sharp-naze](https://huggingface.co/nazeshinjite/Flash-Next-Chat-Templates) is the base, with several fixes from its v1.5;

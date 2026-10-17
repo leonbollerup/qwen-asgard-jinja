@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """tool_prompt=chromix must reproduce chromix+froggerick v1 byte for byte wherever the two templates agree on history
-handling (reasoning sent back); tool_prompt default must equal the model's own text.
+handling (reasoning sent back); tool_prompt=qwen must equal the model's own text, and the default is chromix.
 usage: python tests/test_tool_prompt.py TOKENIZER_DIR [TEMPLATE] [CHROMIX_TEMPLATE]"""
 import sys
 from pathlib import Path
@@ -36,10 +36,15 @@ for name, msgs in cases.items():
             fails.append(f"{name} {kw}: chromix={c[i:i + 70]!r} ours={t[i:i + 70]!r}")
         print(("PASS " if ok else "FAIL ") + f"tool_prompt=chromix == chromix v1: {name} {kw}")
     o = tok.apply_chat_template(msgs[:2] if name != "first turn" else msgs, tools=TOOLS, chat_template=O, tokenize=False, add_generation_prompt=True, reasoning_effort="medium")
-    d = tok.apply_chat_template(msgs[:2] if name != "first turn" else msgs, tools=TOOLS, chat_template=T, tokenize=False, add_generation_prompt=True, reasoning_effort="medium")
-    print(("PASS " if o == d else "FAIL ") + f"default tool_prompt == model's own text ({name}, first turn)")
+    d = tok.apply_chat_template(msgs[:2] if name != "first turn" else msgs, tools=TOOLS, chat_template=T, tokenize=False, add_generation_prompt=True, reasoning_effort="medium", tool_prompt="qwen")
+    print(("PASS " if o == d else "FAIL ") + f"tool_prompt=qwen == model's own text ({name}, first turn)")
     if o != d:
-        fails.append(f"default differs from model's own: {name}")
+        fails.append(f"tool_prompt=qwen differs from model's own: {name}")
+    dc = tok.apply_chat_template(msgs, tools=TOOLS, chat_template=T, tokenize=False, add_generation_prompt=True, reasoning_effort="medium")
+    cc = tok.apply_chat_template(msgs, tools=TOOLS, chat_template=C, tokenize=False, add_generation_prompt=True, reasoning_effort="medium")
+    print(("PASS " if dc == cc else "FAIL ") + f"default (no tool_prompt) == chromix v1 ({name})")
+    if dc != cc:
+        fails.append(f"default differs from chromix: {name}")
 q = tok.apply_chat_template([U], tools=TOOLS, chat_template=T, tokenize=False, add_generation_prompt=True, tool_prompt="QWEN")
-print(("PASS " if q == tok.apply_chat_template([U], tools=TOOLS, chat_template=T, tokenize=False, add_generation_prompt=True) else "FAIL ") + "tool_prompt='QWEN' = default")
+print(("PASS " if q == tok.apply_chat_template([U], tools=TOOLS, chat_template=T, tokenize=False, add_generation_prompt=True, tool_prompt="qwen") else "FAIL ") + "tool_prompt='QWEN' = 'qwen'")
 print("\nALL PASS" if not fails else "\n" + "\n".join(fails))

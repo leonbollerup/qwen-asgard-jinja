@@ -2,14 +2,15 @@
 
 *Named after Asgard, home of the Norse gods, and of the server it was forged and tested on.*
 
-A chat template for Qwen3.8-Flash-Next and its fine-tunes, for **vLLM, SGLang and llama.cpp**. Out of the box it renders **exactly the model's own prompt**, then adds the robustness fixes from the community templates. Every behaviour change is an **opt-in switch**.
+A chat template for Qwen3.8-Flash-Next and its fine-tunes, for **vLLM, SGLang and llama.cpp**. It keeps the **model's own prompt format** and uses the **tool instructions that measured best** (+1.4 BFCL points). It adds the robustness fixes from the community templates, and every other behaviour change is an **opt-in switch**.
 
 Every claim below comes from a test in `tests/`: render tests against the reference templates, a live end-to-end feature check, and a paired quality benchmark.
 
 ## TL;DR
 
-- **Drop-in.** With no settings it is the model's own prompt, byte for byte, plus fixes for requests that break other templates.
-- **Recommended on vLLM:** `--default-chat-template-kwargs '{"reasoning_effort":"medium","tool_prompt":"chromix"}'`. This measured **+1.4 BFCL points** in two independent runs, with no loss on coding (EvalPlus) or long context.
+- **Drop-in.** With no settings you get the measured best: the model's own prompt format with the chromix tool instructions. That gave **+1.4 BFCL points** in two independent runs, with no loss on coding (EvalPlus) or long context.
+  - `tool_prompt: "qwen"` gives the model's own prompt byte for byte.
+- **Recommended effort: `medium`.** `xhigh` measured −5.2 BFCL points.
 - **Fixes that every upstream template we tested lacks:**
   - Claude Code tool search (HTTP 400 before);
   - prompt injection through `<|im_end|><|im_start|>system` text in web pages or files;
@@ -34,7 +35,8 @@ Every claim below comes from a test in `tests/`: render tests against the refere
 
 | | Default | Notes |
 |---|---|---|
-| Tool-call wire format, tool instructions, generation prompt | **byte-identical to the model's own template** | verified by `tests/render_tests.py` |
+| Tool-call wire format, tool definitions, generation prompt | **byte-identical to the model's own template** | verified by `tests/render_tests.py` |
+| Tool instructions | chromix+froggerick v1 text, byte-identical to that template (measured +1.4 BFCL points) | `tool_prompt: "qwen"` = the model's own text, byte for byte |
 | Reasoning effort | `medium`; accepts `none`, `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`, `ultracode`, `extreme`; unknown → `medium` | never raises |
 | Inline effort tags | `<\|think_off\|>`, `<\|think_on\|>`, `<\|think_low\|>` … `<\|think_extreme\|>` in a user or system message; the last one in the conversation wins and stays in effect. `<\|think_on\|>` beats `enable_thinking=false` and effort `none` | tags are stripped before rendering |
 | History reasoning | read from `reasoning_content`, `reasoning`, `thinking` (string or blocks), or a leading `<think>…</think>` in content | no empty `<think>` blocks |
@@ -55,30 +57,30 @@ Every claim below comes from a test in `tests/`: render tests against the refere
 
 | kwarg | Effect | Prompt cost |
 |---|---|---|
-| `tool_prompt: "chromix"` | the chromix+froggerick v1 tool instructions ("Use only function names and parameters defined in `<tools>`", one closed `<tool_call>` per function, …), byte-identical to that template; same XML wire format | +46 tokens (with tools) |
+| `tool_prompt: "qwen"` | the model's own tool instructions, byte for byte. The default is `chromix` ("Use only function names and parameters defined in `<tools>`", one closed `<tool_call>` per function, …); the XML wire format is the same either way | −46 tokens (with tools) |
 | `terse: true` | Sharp v22.5 terseness block after the system prompt | +151 tokens |
 | `payload_rules: true` | two tool-discipline bullets: literal parameter values only; never resend a failing call | +72 (with tools) |
 | `failure_notes: true` | escalating notes inside tool results after tool failures (deterministic, so prefix-cache-stable) | 0 until a failure |
-| `strict_tool_rules: true` | four tool-format bullets (line-start tags, one closed `<tool_call>` per function, no nesting, no text after a call) | +67 (with tools) |
+| `strict_tool_rules: true` | four tool-format bullets (line-start tags, one closed `<tool_call>` per function, no nesting, no text after a call). Already part of the default chromix text, so it only matters with `tool_prompt: "qwen"` | +67 with `qwen` |
 | `max_tool_response_chars: N` | keep head and tail of tool results longer than N characters, with a marker | saves context |
 | `max_tool_arg_chars: N` | keep head and tail of long tool-call argument values in history, e.g. file contents written earlier. The marker says the call was sent in full, so the model does not "repair" its own write | saves context in long agent sessions |
 | `preserve_thinking: false` (alias `preserve_reasoning`) | drop earlier turns' reasoning | saves context, costs prefix reuse |
 
-With `terse`, `payload_rules`, `failure_notes` and `reasoning_effort: xhigh`, ordinary conversations render byte-identically to Sharp-naze v1.4.
+With `tool_prompt: "qwen"`, `terse`, `payload_rules`, `failure_notes` and `reasoning_effort: xhigh`, ordinary conversations render byte-identically to Sharp-naze v1.4.
 
 **Deliberately not taken from chromix:** the automatic switch to a JSON tool-call format when names or argument values contain XML-like text. vLLM's `qwen3_xml` parser only reads the XML format, so a JSON-format call would arrive as plain text instead of a tool call. It is also off the format the model was trained on.
 
 ## Engine compatibility
 
-The same 41 render cases were run through each Jinja engine. "Identical" means byte-identical to the transformers/jinja2 render (what vLLM uses).
+The same 42 render cases were run through each Jinja engine. "Identical" means byte-identical to the transformers/jinja2 render (what vLLM uses).
 
 | Engine | Qwen Asgard v1 | Sharp-naze v1.4 | model's own template |
 |---|---|---|---|
-| transformers / jinja2 (vLLM, SGLang) | 41/41 render | 38/41 | 24/41 |
-| `@huggingface/jinja` 0.5.1 and 0.5.10 (transformers.js and JavaScript-based apps) | 41/41 identical | 38/41 | 24/41 |
-| llama.cpp (own Jinja engine and chat layer, Oct 2026) | 40/41 render, 35 identical\* | 38/41 | 29/41 |
+| transformers / jinja2 (vLLM, SGLang) | 42/42 render | 39/42 | 25/42 |
+| `@huggingface/jinja` 0.5.1 and 0.5.10 (transformers.js and JavaScript-based apps) | 42/42 identical | 39/42 | 25/42 |
+| llama.cpp (own Jinja engine and chat layer, Oct 2026) | 41/42 render, 36 identical\* | 39/42 | 30/42 |
 
-\* All 5 differences are llama.cpp's input normalisation, not the template: it turns string tool arguments into objects (so they render as proper XML parameters) and does not carry Anthropic-style `thinking` blocks. The 41st case (`tool_reference` parts) is rejected by llama.cpp's own message parser before any template runs. llama.cpp builds that mark message text as input can turn off `escape_control_tokens`.
+\* All 5 differences are llama.cpp's input normalisation, not the template: it turns string tool arguments into objects (so they render as proper XML parameters) and does not carry Anthropic-style `thinking` blocks. The 42nd case (`tool_reference` parts) is rejected by llama.cpp's own message parser before any template runs. llama.cpp builds that mark message text as input can turn off `escape_control_tokens`.
 
 **llama.cpp output parsing.** llama.cpp derives its output parser from the template, so this was checked with model-style outputs. 6/6 parsed correctly:
 - reasoning plus a single tool call;
@@ -108,16 +110,18 @@ _Swift 1.5 AWQ on 2× CMP 170HX, vLLM, temperature 1.0 / top_p 0.95 / top_k 20, 
 
 **Template A/B** (2026-10-16/17). BFCL v4 has 1040 items × 2 repeats (2080 calls per variant). The diff is paired per item, the CI is an item bootstrap, and p comes from a sign test on the items that differ.
 
-| Variant (kwargs on top of the defaults) | BFCL | Δ vs defaults | EvalPlus (542) | Long context (180) |
+| Variant | BFCL | Δ vs the model's own text | EvalPlus (542) | Long context (180) |
 |---|---|---|---|---|
-| **defaults** = the model's own prompt + fixes | 78.9% | | 85.8% | 98.3% |
-| `tool_prompt: chromix` (measured as the chromix v1 template, which renders identical prompts) | **80.2%** | **+1.3 pt** (−0.1 … +2.7, p 0.14) | 84.9%\* | 97.2%\* |
+| `tool_prompt: qwen` = the model's own prompt + fixes | 78.9% | | 85.8% | 98.3% |
+| `tool_prompt: chromix`, **the default** (measured as the chromix v1 template, which renders identical prompts) | **80.2%** | **+1.3 pt** (−0.1 … +2.7, p 0.14) | 84.9%\* | 97.2%\* |
 | `payload_rules` + `failure_notes` | 78.1% | −0.8 pt (−2.3 … +0.7, p 0.13) | | |
 | `payload_rules` + `failure_notes` + `terse` | 78.3% | −0.6 pt (−2.2 … +1.1) | 85.4%, with **38% fewer output tokens** | 96.1% |
 | `strict_tool_rules` | 78.8% | −0.1 pt (−1.5 … +1.3) | | |
 | `payload_rules` + `failure_notes` + `strict_tool_rules` | 77.8% | −1.1 pt (−2.5 … +0.5, p 0.09) | | |
 
-\* Without tools, chromix v1 and the defaults render **byte-identical** prompts. These two numbers therefore show the run-to-run noise (about ±1 point), not a template effect.
+The rows below add switches on top of `tool_prompt: qwen`.
+
+\* Without tools, chromix v1 and `tool_prompt: qwen` render **byte-identical** prompts. These two numbers therefore show the run-to-run noise (about ±1 point), not a template effect.
 
 **Reading:**
 - Only the chromix tool text helps, and mostly on irrelevance: 85.0% vs 80.5%, and live 80.3% vs 77.3%. It probably comes from "Use only function names and parameters defined in `<tools>`" and the clearer "If no function call is needed…".
@@ -125,8 +129,8 @@ _Swift 1.5 AWQ on 2× CMP 170HX, vLLM, temperature 1.0 / top_p 0.95 / top_k 20, 
 - Sharp's payload rules and failure notes tend to hurt.
 - `terse` makes coding answers much shorter at no measurable cost on EvalPlus, but it was only tested together with the other two.
 
-**Final version, measured again in an independent run** (Qwen Asgard v1 with `tool_prompt: chromix` on vLLM with patches A1/A2):
-- BFCL 80.3%: **+1.4 points** vs the defaults (CI +0.0 … +2.9). This replicates the chromix effect.
+**Final version, measured again in an independent run** (Qwen Asgard v1 with its default `tool_prompt: chromix`, on vLLM with patches A1/A2):
+- BFCL 80.3%: **+1.4 points** vs the model's own text (CI +0.0 … +2.9). This replicates the chromix effect.
 - EvalPlus 86.5% and long context 97.2%, both inside the noise.
 - Live feature check: 29/29.
 
@@ -145,16 +149,16 @@ _Swift 1.5 AWQ on 2× CMP 170HX, vLLM, temperature 1.0 / top_p 0.95 / top_k 20, 
 ```bash
 vllm serve <model> --chat-template qwen-asgard-v1.jinja \
   --reasoning-parser qwen3 --enable-auto-tool-choice --tool-call-parser qwen3_xml \
-  --default-chat-template-kwargs '{"reasoning_effort":"medium","tool_prompt":"chromix"}'
+  --default-chat-template-kwargs '{"reasoning_effort":"medium"}'
 ```
 
-`tool_prompt: chromix` is the measured best setting: +1.4 BFCL points in two independent runs, and equal on EvalPlus and long context. Leave it out to get the model's own prompt byte for byte.
+The default tool text (`chromix`) is the measured best: +1.4 BFCL points in two independent runs, and equal on EvalPlus and long context. Add `"tool_prompt":"qwen"` to get the model's own prompt byte for byte.
 
 **llama.cpp:**
 
 ```bash
 llama-server -m <model.gguf> --jinja --chat-template-file qwen-asgard-v1.jinja \
-  --chat-template-kwargs '{"reasoning_effort":"medium","tool_prompt":"chromix"}'
+  --chat-template-kwargs '{"reasoning_effort":"medium"}'
 ```
 
 On llama.cpp the inline thinking tags work without any patch. Recent llama.cpp builds that mark message text as user input can set `"escape_control_tokens": false`.
@@ -224,11 +228,11 @@ python tests/test_a1_consistency.py TOKENIZER_DIR qwen-asgard-v1.jinja vllm-patc
   - escaping, checked on the token level with the model's tokenizer;
   - parallel-result order, string switches, `video_url` and wrapped tool results.
 - **`tests/test_a1_consistency.py`** runs the exhaustive template/parser agreement check for patch A1.
-- **`tests/test_tool_prompt.py`** proves that `tool_prompt: chromix` reproduces the chromix v1 template (in `tests/reference/`) byte for byte.
+- **`tests/test_tool_prompt.py`** proves that the default (`chromix`) reproduces the chromix v1 template (in `tests/reference/`) byte for byte, and that `tool_prompt: qwen` reproduces the model's own text.
 - **`tests/bench_render.py`** times the template render for long agent sessions.
 - **`tests/feature_check_live.py [BASE_URL]`** checks every feature end to end through a running vLLM server: OpenAI and Anthropic APIs, tools, parallel calls, round trips, reasoning fields, roles, and prefix reuse. Uses the env vars `API_KEY` and `MODEL`.
 - **`tests/portability/`** holds the cross-engine tests.
-  - `cases.py` writes the 41 cases.
+  - `cases.py` writes the 42 cases.
   - `render_py.py` renders them with transformers.
   - `render_js.mjs` renders them with `@huggingface/jinja` and diffs.
   - `tplcheck.cpp` is a small llama.cpp tool (drop it in `examples/tplcheck/`, CMake file included). It renders through llama.cpp's chat layer and parses sample model outputs with the parser llama.cpp derives. `cmp_llama.py` compares the results.

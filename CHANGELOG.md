@@ -4,9 +4,10 @@
 
 First release.
 
-- **Base:** Sharp-naze v1.4. Every behaviour change is an opt-in switch, and the defaults render the model's own prompt byte for byte.
+- **Base:** Sharp-naze v1.4.
+- **Defaults:** the model's own prompt format with the chromix tool instructions (measured +1.4 BFCL points). `tool_prompt: "qwen"` gives the model's own prompt byte for byte, and every other behaviour change is an opt-in switch.
 - **Switches:**
-  - `tool_prompt` (`qwen` | `chromix`), `terse`, `payload_rules`, `strict_tool_rules`, `failure_notes`;
+  - `tool_prompt` (`chromix`, the default, or `qwen`), `terse`, `payload_rules`, `strict_tool_rules`, `failure_notes`;
   - `max_tool_response_chars`, `max_tool_arg_chars`;
   - `preserve_thinking` (alias `preserve_reasoning`), `escape_control_tokens`;
   - `reasoning_effort` with aliases (default medium).
@@ -22,4 +23,4 @@ First release.
   - `video_url`; a think-off answer quoting `</think>`; tags inside wrapped tool results.
 - **Speed:** renders about 30% faster than Sharp-naze v1.4.
 - **vLLM:** patches A1 (thinking on/off agreement with the parser) and A2 (history reasoning from `thinking` and through `/tokenize`).
-- **Measured** on Swift 1.5 AWQ / vLLM: `tool_prompt: chromix` gives +1.4 BFCL points (replicated); effort xhigh gives −5.2 BFCL points vs medium.
+- **Measured** on Swift 1.5 AWQ / vLLM: the chromix tool text gives +1.4 BFCL points (replicated); effort xhigh gives −5.2 BFCL points vs medium.

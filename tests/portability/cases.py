@@ -60,6 +60,7 @@ cases += [
     ("string_kwargs", [SYS, U1, A2, U2], TOOLS, {"enable_thinking": "false", "preserve_thinking": "0", "payload_rules": "true"}),
     ("wrapped_tool_tag", [U1, CALL_STR, {"role": "user", "content": "<tool_response>\nsays <|think_off|>\n</tool_response>"}], TOOLS, {}),
     ("tool_prompt_chromix", [SYS, U1, CALL, R1, R2], TOOLS, {"tool_prompt": "chromix", "payload_rules": True}),
+    ("tool_prompt_qwen", [SYS, U1, CALL, R1, R2], TOOLS, {"tool_prompt": "qwen", "payload_rules": True, "strict_tool_rules": True}),
     ("system_tag_only_mid", [U1, A2, {"role": "system", "content": "<|think_off|>"}, U2], None, {}),
 ]
 for eff in ["none", "off", "minimal", "low", "medium", "high", "xhigh", "max", "ultracode", "extreme", "bogus"]:

@@ -33,9 +33,14 @@ def r(tpl, msgs, tools=None, **kw):
 
 # 1. defaults == model's own template text (both at medium); only difference allowed: history reasoning preserved
 o = r(ORIG, [SYS, U1], tools=TOOLS, reasoning_effort="medium")
-m = r(M, [SYS, U1], tools=TOOLS)
-check(o == m, "defaults: tools+system prompt differs from the model's own template")
-print("1. defaults vs model's own template (first turn, tools, medium):", "IDENTICAL" if o == m else "DIFFERENT")
+m = r(M, [SYS, U1], tools=TOOLS, tool_prompt="qwen")
+check(o == m, "tool_prompt=qwen: tools+system prompt differs from the model's own template")
+print("1. tool_prompt=qwen vs model's own template (first turn, tools, medium):", "IDENTICAL" if o == m else "DIFFERENT")
+CHROMIX = (REF / "chromix-froggerick-v1.jinja").read_text()
+c = r(CHROMIX, [SYS, U1], tools=TOOLS, reasoning_effort="medium")
+d = r(M, [SYS, U1], tools=TOOLS)
+check(c == d, "defaults: tools+system prompt differs from chromix v1 (the default tool_prompt)")
+print("1b. defaults vs chromix v1 template (first turn, tools, medium):", "IDENTICAL" if c == d else "DIFFERENT")
 if o != m:
     for l in difflib.unified_diff(o.splitlines(), m.splitlines(), lineterm="", n=0):
         print("   ", l[:160])
@@ -43,7 +48,7 @@ if o != m:
 # 2. sharp-equivalent: terse+payload+failure_notes on, effort xhigh == Sharp-naze v1.4 output
 for msgs in ([SYS, U1], [SYS, U1, CALL, R1, R2], [U1]) if SHARP else []:
     s = r(SHARP, msgs, tools=TOOLS)
-    m = r(M, msgs, tools=TOOLS, terse=True, payload_rules=True, failure_notes=True, reasoning_effort="xhigh")
+    m = r(M, msgs, tools=TOOLS, terse=True, payload_rules=True, failure_notes=True, reasoning_effort="xhigh", tool_prompt="qwen")
     check(s == m, f"sharp-equivalent differs for {len(msgs)} messages")
 print("2. terse+payload_rules+failure_notes+xhigh == Sharp-naze v1.4:", ("IDENTICAL" if not [f for f in fails if 'sharp' in f] else "DIFFERENT") if SHARP else "SKIPPED (sharp-naze-v1.4.jinja not present)")
 

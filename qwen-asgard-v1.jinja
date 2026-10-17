@@ -2,14 +2,16 @@
 {#- Qwen Asgard v1 - chat template for Qwen3.8-Flash-Next and its fine-tunes (e.g. Swift 1.5).
     Engines: vLLM / SGLang / transformers (jinja2), llama.cpp, @huggingface/jinja. License: Qwen Community License 1.0.
 
-    Defaults render the model's own prompt byte for byte (system prompt, tool definitions and instructions, tool-call
-    wire format, generation prompt). Every behaviour change is an opt-in switch, set per request in
-    chat_template_kwargs or for the whole server with --default-chat-template-kwargs.
-    Measured best on vLLM (Swift 1.5, BFCL v4 +1.4 pt, replicated): {"reasoning_effort": "medium", "tool_prompt": "chromix"}
+    Defaults render the model's own prompt format (system prompt, tool definitions, tool-call wire format, generation
+    prompt); only the tool instructions default to the chromix text, which measured +1.4 BFCL points (Swift 1.5 on
+    vLLM, replicated). tool_prompt: "qwen" gives the model's own prompt byte for byte. Every other behaviour change is
+    an opt-in switch, set per request in chat_template_kwargs or for the whole server with
+    --default-chat-template-kwargs. Recommended: reasoning_effort "medium" (xhigh measured -5.2 BFCL points).
 
     Switches (for the on/off ones, "false" / "0" / "off" / "no" count as false):
       reasoning_effort         medium  none/off/minimal/low/medium/high/xhigh/max/ultracode/extreme; unknown -> medium
-      tool_prompt              qwen    'chromix' = chromix+froggerick v1 tool instructions (same XML wire format)
+      tool_prompt              chromix the chromix+froggerick v1 tool instructions (measured +1.4 BFCL points; same XML wire
+                                       format); 'qwen' = the model's own tool instructions, byte for byte
       preserve_thinking        true    keep earlier turns' reasoning (full prefix-cache reuse); false = drop it before
                                        the last user turn (the model's default); alias preserve_reasoning
       escape_control_tokens    true    control-token text (<|im_end|>, <|im_start|>, ...) in user/system/tool content is
@@ -184,7 +186,7 @@
 {%- if not messages %}
     {{- raise_exception('No messages provided.') }}
 {%- endif %}
-{%- set _tool_prompt = (tool_prompt|string|trim|lower) if (tool_prompt is defined and tool_prompt is not none) else 'qwen' %}
+{%- set _tool_prompt = (tool_prompt|string|trim|lower) if (tool_prompt is defined and tool_prompt is not none) else 'chromix' %}
 {%- set _esc_on = _truthy(escape_control_tokens) if (escape_control_tokens is defined and escape_control_tokens is not none) else '1' %}
 {%- set sysns = namespace(count=0, text='') %}
 {%- for message in messages %}
@@ -310,10 +312,10 @@ If a user request is genuinely ambiguous, ask a sharp question, don't guess.
     {%- endfor %}
     {{- "\n</tools>" }}
     {#- asgard: tool_prompt selects the instruction text around the (identical) tool definitions:
-        'qwen' (default) = the model's own text; 'chromix' = the chromix+froggerick v1 rewrite, byte-identical to
+        'chromix' (default, measured +1.4 BFCL points) = the chromix+froggerick v1 rewrite, byte-identical to
         that template ("Use only function names and parameters defined in <tools>", one closed block per call, ...).
         Same XML wire format either way. strict_tool_rules is already part of the chromix text. -#}
-    {%- if _tool_prompt == 'chromix' %}
+    {%- if _tool_prompt not in ('qwen', 'original') %}
         {{- '\n\nIf you choose to call a function ONLY reply in the following format with NO suffix:\n\n<tool_call>\n<function=example_function_name>\n<parameter=example_parameter_1>\nvalue_1\n</parameter>\n<parameter=example_parameter_2>\nvalue_2\n</parameter>\n</function>\n</tool_call>\n\n<IMPORTANT>\nReminder:\n- Use only function names and parameters defined in <tools>\n- Required parameters MUST be specified\n' }}
         {%- if payload_rules is defined and _truthy(payload_rules) %}
             {{- '- Parameter values are LITERAL content only: never place XML tags, fragments of this or any previous tool call (such as \"lines\": or \"end\":), or format metadata inside a <parameter=...> value\n- If a tool result reports an error or a warning, identify the cause and change your approach; never resend a failing call unchanged\n' }}
